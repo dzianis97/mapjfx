@@ -3,7 +3,7 @@
 
     <groupId>com.hry</groupId>
     <artifactId>mapjfx</artifactId>
-    <version>2.14.0-5.3.0</version>
+    <version>2.14.0-5.3.0-1</version>
     <name>${project.groupId}:${project.artifactId}</name>
     <description>a JavaFX map component build by using OpenLayers</description>
     <url>http://www.sothawo.com/projects/mapjfx</url>
@@ -70,11 +70,11 @@
             <version>${junit.jupiter.version}</version>
             <scope>test</scope>
         </dependency>        <dependency>
-            <groupId>org.assertj</groupId>
-            <artifactId>assertj-core</artifactId>
-            <version>${assertj.version}</version>
-            <scope>test</scope>
-        </dependency>
+        <groupId>org.assertj</groupId>
+        <artifactId>assertj-core</artifactId>
+        <version>${assertj.version}</version>
+        <scope>test</scope>
+    </dependency>
         <dependency>
             <groupId>org.skyscreamer</groupId>
             <artifactId>jsonassert</artifactId>
