@@ -124,6 +124,12 @@ JSMapView.prototype.init = function (config) {
 
     view.on('change:resolution', (function (evt) {
         this.javaConnector.zoomChanged(view.getZoom());
+        this.javaConnector.rotationChanged(view.getRotation());
+        this.reportExtent();
+    }).bind(this));
+
+    view.on('change:rotation', (function (evt) {
+        this.javaConnector.rotationChanged(view.getRotation());
         this.reportExtent();
     }).bind(this));
 
@@ -183,6 +189,26 @@ JSMapView.prototype.setZoom = function (zoom, animationDuration) {
             });
         } else {
             view.setZoom(zoom);
+        }
+    }
+};
+
+/**
+ * sets the rotation of the map
+ *
+ * @param {number} rotation angle
+ * @param {number} animationDuration duration in ms
+ */
+JSMapView.prototype.setRotation = function (rotation, animationDuration) {
+    var view = this.map.getView();
+    if (rotation !== view.getRotation()) {
+        if (animationDuration > 1) {
+            view.animate({
+                rotation: rotation,
+                duration: animationDuration
+            });
+        } else {
+            view.setRotation(rotation);
         }
     }
 };

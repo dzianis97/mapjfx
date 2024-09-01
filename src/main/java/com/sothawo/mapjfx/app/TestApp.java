@@ -19,7 +19,6 @@ import com.sothawo.mapjfx.*;
 import com.sothawo.mapjfx.event.MapLabelEvent;
 import com.sothawo.mapjfx.event.MapViewEvent;
 import com.sothawo.mapjfx.event.MarkerEvent;
-import com.sothawo.mapjfx.offline.OfflineCache;
 import javafx.application.Application;
 import javafx.geometry.Insets;
 import javafx.scene.Scene;
@@ -40,8 +39,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.nio.file.FileSystems;
-import java.util.Collections;
 import java.util.LinkedList;
 
 /**
@@ -306,10 +303,10 @@ public class TestApp extends Application {
     }
 
     private void initOfflineCache() {
-        final OfflineCache offlineCache = OfflineCache.INSTANCE;
-        offlineCache.setCacheDirectory(FileSystems.getDefault().getPath("tmpdata/cache"));
-        offlineCache.setActive(true);
-        offlineCache.setNoCacheFilters(Collections.singletonList(".*\\.sothawo\\.com/.*"));
+//        final OfflineCache offlineCache = OfflineCache.INSTANCE;
+//        offlineCache.setCacheDirectory(FileSystems.getDefault().getPath("tmpdata/cache"));
+//        offlineCache.setActive(true);
+//        offlineCache.setNoCacheFilters(Collections.singletonList(".*\\.sothawo\\.com/.*"));
 
         LinkedList<String> urls = new LinkedList<>();
         urls.add("https://c.tile.openstreetmap.org/14/8572/5626.png");
@@ -331,7 +328,7 @@ public class TestApp extends Application {
         urls.add("https://c.tile.openstreetmap.org/14/8574/5625.png");
         urls.add("https://c.tile.openstreetmap.org/14/8573/5627.png");
 
-        offlineCache.preloadURLs(urls, 2);
+        //offlineCache.preloadURLs(urls, 2);
     }
 
     /**
@@ -358,6 +355,14 @@ public class TestApp extends Application {
         // add an observer to adjust the label
         mapView.zoomProperty().addListener((observable, oldValue, newValue) -> {
             labelZoom.setText(null == newValue ? "" : ("zoom: " + newValue.toString()));
+        });
+
+        // label for showing the map's zoom
+        Label labelRotation = new Label();
+        hbox.getChildren().add(labelRotation);
+        // add an observer to adjust the label
+        mapView.rotationProperty().addListener((observable, oldValue, newValue) -> {
+            labelRotation.setText(null == newValue ? "" : ("rotation: " + newValue.toString()));
         });
         return hbox;
     }
@@ -465,6 +470,11 @@ public class TestApp extends Application {
             mapView.setMapType(MapType.BINGMAPS_CANVAS_LIGHT);
         });
         bingOptions.add(item);
+
+        btn = new Button();
+        btn.setText("Set Rotation");
+        btn.setOnAction(evt -> mapView.setRotation(Math.PI / 6));
+        hbox.getChildren().add(btn);
 
 
 

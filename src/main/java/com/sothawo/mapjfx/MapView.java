@@ -99,6 +99,8 @@ public final class MapView extends Region implements AutoCloseable {
     public static final int MAX_ZOOM = 28;
     /** initial zoom value for the map. */
     public static final int INITIAL_ZOOM = 14;
+    /** initial rotation value for the map. */
+    public static final double INITIAL_ROTATION = 0.0;
 
     /** Logger for the class */
     private static final Logger logger = LoggerFactory.getLogger(MapView.class);
@@ -120,6 +122,8 @@ public final class MapView extends Region implements AutoCloseable {
     private final AtomicReference<Coordinate> lastCoordinateFromMap = new AtomicReference<>();
     /** used to store the last zoom value that was reported by the map to prevent setting it again in the map. */
     private final AtomicReference<Long> lastZoomFromMap = new AtomicReference<>();
+    /** used to store the last zoom value that was reported by the map to prevent setting it again in the map. */
+    private final AtomicReference<Double> lastRotationFromMap = new AtomicReference<>();
     /**
      * a map from the names of MapCoordinateElements in the map to WeakReferences of the Objects. When
      * mapCoordinateElements are gc'ed the keys in this map point to null and are used to clean up the internal
@@ -159,6 +163,7 @@ public final class MapView extends Region implements AutoCloseable {
      * a rounded value is used.
      */
     private SimpleDoubleProperty zoom;
+    private SimpleDoubleProperty rotation;
     /** property containing the map's animation duration in ms. */
     private SimpleIntegerProperty animationDuration;
     /** property containing the actual map style, defaults to {@link com.sothawo.mapjfx.MapType#OSM} */
@@ -224,6 +229,17 @@ public final class MapView extends Region implements AutoCloseable {
                     logger.trace("zoom changed from {} to {}", oldValue, rounded);
                 }
                 setZoomInMap();
+            }
+        });
+
+        rotation = new SimpleDoubleProperty(INITIAL_ROTATION);
+        rotation.addListener((observable, oldValue, newValue) -> {
+            // check if this is the same value that was just reported from the map using object equality
+            if (!Objects.equals(newValue, lastRotationFromMap.get())) {
+                if (logger.isTraceEnabled()) {
+                    logger.trace("rotation changed from {} to {}", oldValue, newValue);
+                }
+                setRotationInMap();
             }
         });
 
@@ -364,6 +380,19 @@ public final class MapView extends Region implements AutoCloseable {
     }
 
     /**
+     * sets the value of the actual rotation property in the OL map.
+     */
+    private void setRotationInMap() {
+        if (getInitialized()) {
+            final double rotation = getRotation();
+            if (logger.isTraceEnabled()) {
+                logger.trace("setting rotation in OpenLayers map: {}, animation: {}", rotation, animationDuration.get());
+            }
+            jsMapView.call("setRotation", rotation, animationDuration.get());
+        }
+    }
+
+    /**
      * checks if the given map type needs an api key, and if so, if it is set.
      *
      * @param mapTypeToCheck
@@ -440,6 +469,13 @@ public final class MapView extends Region implements AutoCloseable {
     }
 
     /**
+     * @return the current map rotation value.
+     */
+    public double getRotation() {
+        return rotation.get();
+    }
+
+    /**
      * sets the zoom level. the zoom value is rounded to the next whole number using {@link Math#round(double)} and then
      * checked to be in the range between {@link #MIN_ZOOM} and {@link #MAX_ZOOM }. If the value is not in this range,
      * the call is ignored.
@@ -454,6 +490,18 @@ public final class MapView extends Region implements AutoCloseable {
             return this;
         }
         this.zoom.set(rounded);
+        return this;
+    }
+
+    /**
+     * sets the rotation level. the rotation value should be in radians.
+     *
+     * @param rotation
+     *     new rotation angle
+     * @return this object
+     */
+    public MapView setRotation(final double rotation) {
+        this.rotation.set(rotation);
         return this;
     }
 
@@ -1343,6 +1391,10 @@ public final class MapView extends Region implements AutoCloseable {
         return zoom;
     }
 
+    public SimpleDoubleProperty rotationProperty() {
+        return rotation;
+    }
+
     /**
      * Connector object. Methods of an object of this class are called from JS code in the web page.
      */
@@ -1710,6 +1762,20 @@ public final class MapView extends Region implements AutoCloseable {
             }
             lastZoomFromMap.set(roundedZoom);
             setZoom(roundedZoom);
+        }
+
+        /**
+         * called when the user changed the rotation with the controls in the map.
+         *
+         * @param newRotation
+         *     new rotation angle value
+         */
+        public void rotationChanged(double newRotation) {
+            if (logger.isTraceEnabled()) {
+                logger.trace("JS reports rotation value {}", newRotation);
+            }
+            lastRotationFromMap.set(newRotation);
+            setRotation(newRotation);
         }
 
         /**
