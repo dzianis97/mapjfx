@@ -69,15 +69,15 @@ JSMapView.prototype.init = function (config) {
             zoom: 1,
             projection: configuration.projection
         }),
-        controls: ol.control.defaults({
-            zoom: configuration.showZoomControls
-        }),
-        interactions: ol.interaction.defaults({
-            doubleClickZoom: configuration.interactive,
-            dragPan: configuration.interactive,
-            keyboardZoom: configuration.interactive,
-            mouseWheelZoom: configuration.interactive
-        })
+       controls: ol.control.defaults.defaults({
+           zoom: configuration.showZoomControls
+       }),
+       interactions: ol.interaction.defaults.defaults({
+           doubleClickZoom: configuration.interactive,
+           dragPan: configuration.interactive,
+           keyboardZoom: configuration.interactive,
+           mouseWheelZoom: configuration.interactive
+       })
     });
 
     var view = this.map.getView();

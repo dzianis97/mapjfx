@@ -948,7 +948,7 @@ public final class MapView extends Region implements AutoCloseable {
                                 jsMapView = (JSObject) o;
                             } catch (final JSException e) {
                                 if (logger.isWarnEnabled()) {
-                                    logger.warn("JS not ready, retrying...");
+                                    logger.warn("JS not ready, retrying... " + e.getMessage());
                                 }
                                 numRetries++;
                                 try {
