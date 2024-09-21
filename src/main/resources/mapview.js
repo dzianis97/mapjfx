@@ -714,7 +714,7 @@ JSMapView.prototype.rotateMapObject = function (name, angle) {
     this.javaConnector.debug("should rotate " + name + " to " + angle);
     var mapObject = this.mapObjects[name];
     if (mapObject && mapObject.getOnMap()) {
-        let element = mapObject.getOverlay().element
+        let element = mapObject.getOverlay().element.children[0]
         element.style["transform"] = 'rotate(' + angle + 'deg)';
     }
 };

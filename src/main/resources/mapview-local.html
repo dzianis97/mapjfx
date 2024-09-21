@@ -232,6 +232,10 @@ Copyright 2015-2020 Peter-Josef Meisch (pj.meisch@sothawo.com)
         jsMapView.removeCoordinateLine('coli');
     };
 
+    var rotateMarker = function () {
+        jsMapView.rotateMapObject('castle-marker', 30);
+    };
+
 </script>
 <!-- replaced by: -->
 <!--<script type="text/javascript">-->
@@ -248,6 +252,7 @@ Copyright 2015-2020 Peter-Josef Meisch (pj.meisch@sothawo.com)
     <button onclick="showAll();">show</button>
     <button onclick="hideAll();">hide</button>
     <button onclick="removeAll();">remove</button>
+    <button onclick="rotateMarker();">rotate</button>
 </div>
 </body>
 </html>
