@@ -77,6 +77,7 @@ public class TestApp extends Application {
 
     static {
         marker = Marker.createProvided(Marker.Provided.BLUE).setPosition(coordKarlsruheCastle).setVisible(true);
+        marker.setRotateWithMap(true);
         mapLabel = new MapLabel("blau!")
                 .setCssClass("blue-label")
                 .setPosition(coordKarlsruheCastle)

@@ -21,11 +21,7 @@ import com.sothawo.mapjfx.event.MapViewEvent;
 import com.sothawo.mapjfx.event.MarkerEvent;
 import com.sothawo.mapjfx.offline.OfflineCache;
 import javafx.application.Platform;
-import javafx.beans.property.ReadOnlyBooleanProperty;
-import javafx.beans.property.ReadOnlyBooleanWrapper;
-import javafx.beans.property.SimpleDoubleProperty;
-import javafx.beans.property.SimpleIntegerProperty;
-import javafx.beans.property.SimpleObjectProperty;
+import javafx.beans.property.*;
 import javafx.beans.value.ChangeListener;
 import javafx.concurrent.Worker;
 import javafx.event.EventType;
@@ -41,11 +37,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.awt.*;
-import java.io.BufferedReader;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
+import java.io.*;
 import java.lang.ref.ReferenceQueue;
 import java.lang.ref.WeakReference;
 import java.net.URI;
@@ -53,16 +45,8 @@ import java.net.URISyntaxException;
 import java.net.URL;
 import java.net.URLConnection;
 import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
-import java.util.Base64;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Optional;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -71,20 +55,20 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static java.util.Objects.*;
+import static java.util.Objects.requireNonNull;
 
 /**
  * Map component. To use the MapView, construct it and add it to your scene. Then the  {@link #initialized} property
  * should be observed as well as bindings/observations to other properties should be established. <br><br>
- *
+ * <p>
  * After that, the {@link #initialize()} method or one of it's overloads must be called.
  * When the MapView is initialized and ready to be used,
  * the {@link #initialized} property is set to true.<br><br>
- *
+ * <p>
  * No map is displayed until {@link #setCenter(Coordinate)} is called.<br><br>
- *
+ * <p>
  * The MapView does it's logging using java logging with level FINER.<br><br>
- *
+ * <p>
  * All the setters return the MapView itself to enable fluent programming.
  *
  * @author P.J. Meisch (pj.meisch@sothawo.com).
@@ -93,36 +77,62 @@ import static java.util.Objects.*;
 @SuppressWarnings("UnusedDeclaration")
 public final class MapView extends Region implements AutoCloseable {
 
-    /** minimal zoom level, OL defines this as 0. */
+    /**
+     * minimal zoom level, OL defines this as 0.
+     */
     public static final int MIN_ZOOM = 0;
-    /** maximal zoom level, OL defines this as 28. */
+    /**
+     * maximal zoom level, OL defines this as 28.
+     */
     public static final int MAX_ZOOM = 28;
-    /** initial zoom value for the map. */
+    /**
+     * initial zoom value for the map.
+     */
     public static final int INITIAL_ZOOM = 14;
-    /** initial rotation value for the map. */
+    /**
+     * initial rotation value for the map.
+     */
     public static final double INITIAL_ROTATION = 0.0;
 
-    /** Logger for the class */
+    /**
+     * Logger for the class
+     */
     private static final Logger logger = LoggerFactory.getLogger(MapView.class);
 
-    /** URL of the html code for the WebView. */
+    /**
+     * URL of the html code for the WebView.
+     */
     private static final String MAPVIEW_HTML = "/mapview.html";
     private static final String MAP_VIEW_NOT_YET_INITIALIZED = "MapView not yet initialized";
 
-    /** number of retries if Javascript object is not ready. */
+    /**
+     * number of retries if Javascript object is not ready.
+     */
     private static final int NUM_RETRIES_FOR_JS = 10;
 
-    /** marker for custom_mapview.css. */
+    /**
+     * marker for custom_mapview.css.
+     */
     private static final String CUSTOM_MAPVIEW_CSS = "custom_mapview.css";
-    /** readonly property that informs if this MapView is fully initialized. */
+    /**
+     * readonly property that informs if this MapView is fully initialized.
+     */
     private final ReadOnlyBooleanWrapper initialized = new ReadOnlyBooleanWrapper(false);
-    /** flag that is set to true after the technical infrastructure is set up, but before center, zoom etc are set. */
+    /**
+     * flag that is set to true after the technical infrastructure is set up, but before center, zoom etc are set.
+     */
     private final AtomicBoolean mapViewReady = new AtomicBoolean(false);
-    /** used to store the last coordinate that was reported by the map to prevent setting it again in the map. */
+    /**
+     * used to store the last coordinate that was reported by the map to prevent setting it again in the map.
+     */
     private final AtomicReference<Coordinate> lastCoordinateFromMap = new AtomicReference<>();
-    /** used to store the last zoom value that was reported by the map to prevent setting it again in the map. */
+    /**
+     * used to store the last zoom value that was reported by the map to prevent setting it again in the map.
+     */
     private final AtomicReference<Long> lastZoomFromMap = new AtomicReference<>();
-    /** used to store the last zoom value that was reported by the map to prevent setting it again in the map. */
+    /**
+     * used to store the last zoom value that was reported by the map to prevent setting it again in the map.
+     */
     private final AtomicReference<Double> lastRotationFromMap = new AtomicReference<>();
     /**
      * a map from the names of MapCoordinateElements in the map to WeakReferences of the Objects. When
@@ -148,15 +158,25 @@ public final class MapView extends Region implements AutoCloseable {
      * enough to handle Markers and CoordinateLines.
      */
     private final ReferenceQueue<Object> weakReferenceQueue = new ReferenceQueue<>();
-    /** cache for loading images in base64 strings */
+    /**
+     * cache for loading images in base64 strings
+     */
     private final ConcurrentHashMap<URL, String> imgCache = new ConcurrentHashMap<>();
-    /** the OfflineCache. */
+    /**
+     * the OfflineCache.
+     */
     private final OfflineCache offlineCache = OfflineCache.INSTANCE;
-    /** the connector object in the web page; field to prevent it being gc'ed. */
+    /**
+     * the connector object in the web page; field to prevent it being gc'ed.
+     */
     private final JavaConnector javaConnector = new JavaConnector();
-    /** the WebEngine of the WebView containing the OpenLayers Map. */
+    /**
+     * the WebEngine of the WebView containing the OpenLayers Map.
+     */
     private WebEngine webEngine;
-    /** property containing the map's center. */
+    /**
+     * property containing the map's center.
+     */
     private SimpleObjectProperty<Coordinate> center;
     /**
      * property containing the map's zoom; This is a Double so that the property might be bound to a slider, internally
@@ -164,23 +184,41 @@ public final class MapView extends Region implements AutoCloseable {
      */
     private SimpleDoubleProperty zoom;
     private SimpleDoubleProperty rotation;
-    /** property containing the map's animation duration in ms. */
+    /**
+     * property containing the map's animation duration in ms.
+     */
     private SimpleIntegerProperty animationDuration;
-    /** property containing the actual map style, defaults to {@link com.sothawo.mapjfx.MapType#OSM} */
+    /**
+     * property containing the actual map style, defaults to {@link com.sothawo.mapjfx.MapType#OSM}
+     */
     private SimpleObjectProperty<MapType> mapType;
-    /** Connector object that is created in the web page and initialized when the page is fully loaded */
+    /**
+     * Connector object that is created in the web page and initialized when the page is fully loaded
+     */
     private JSObject jsMapView;
-    /** Pattern to find resources to include in the local html file. */
+    /**
+     * Pattern to find resources to include in the local html file.
+     */
     private Pattern htmlIncludePattern = Pattern.compile("^#(.+)#$");
-    /** Bing Maps API Key. */
+    /**
+     * Bing Maps API Key.
+     */
     private Optional<String> bingMapsApiKey = Optional.empty();
-    /** URL for custom mapview css. */
+    /**
+     * URL for custom mapview css.
+     */
     private Optional<URL> customMapviewCssURL = Optional.empty();
-    /** optional WMS server parameters. */
+    /**
+     * optional WMS server parameters.
+     */
     private Optional<WMSParam> wmsParam = Optional.empty();
-    /** optional XYZ server parameters. */
+    /**
+     * optional XYZ server parameters.
+     */
     private Optional<XYZParam> xyzParam = Optional.empty();
-    /** the thread to clean weak references. */
+    /**
+     * the thread to clean weak references.
+     */
     private Thread weakRefCleaner;
 
     /**
@@ -330,7 +368,7 @@ public final class MapView extends Region implements AutoCloseable {
                     }
                     // run on the JavaFX thread, as removeCoordinateLineWithId() calls methods from the WebView
                     Platform.runLater(
-                        () -> mapCoordinateElementsToRemove.forEach(this::removeMapCoordinateElementWithId));
+                            () -> mapCoordinateElementsToRemove.forEach(this::removeMapCoordinateElementWithId));
                 } catch (InterruptedException e) {
                     if (logger.isDebugEnabled()) {
                         logger.debug("thread interrupted");
@@ -362,7 +400,7 @@ public final class MapView extends Region implements AutoCloseable {
             }
             // using Double objects instead of primitives works here
             jsMapView
-                .call("setCenter", actCenter.getLatitude(), actCenter.getLongitude(), animationDuration.get());
+                    .call("setCenter", actCenter.getLatitude(), actCenter.getLongitude(), animationDuration.get());
         }
     }
 
@@ -395,8 +433,7 @@ public final class MapView extends Region implements AutoCloseable {
     /**
      * checks if the given map type needs an api key, and if so, if it is set.
      *
-     * @param mapTypeToCheck
-     *     the map type
+     * @param mapTypeToCheck the map type
      * @return true if either the map type does not need an api key or an api key was set.
      */
     private boolean checkApiKey(final MapType mapTypeToCheck) {
@@ -445,8 +482,7 @@ public final class MapView extends Region implements AutoCloseable {
     /**
      * sets the center of the map. The coordinate must be in EPSG:4326 coordinates (WGS)
      *
-     * @param center
-     *     new center
+     * @param center new center
      * @return this object
      */
     public MapView setCenter(final Coordinate center) {
@@ -480,8 +516,7 @@ public final class MapView extends Region implements AutoCloseable {
      * checked to be in the range between {@link #MIN_ZOOM} and {@link #MAX_ZOOM }. If the value is not in this range,
      * the call is ignored.
      *
-     * @param zoom
-     *     new zoom level
+     * @param zoom new zoom level
      * @return this object
      */
     public MapView setZoom(final double zoom) {
@@ -496,8 +531,7 @@ public final class MapView extends Region implements AutoCloseable {
     /**
      * sets the rotation level. the rotation value should be in radians.
      *
-     * @param rotation
-     *     new rotation angle
+     * @param rotation new rotation angle
      * @return this object
      */
     public MapView setRotation(final double rotation) {
@@ -515,8 +549,7 @@ public final class MapView extends Region implements AutoCloseable {
     /**
      * sets the current MapType.
      *
-     * @param mapType
-     *     the new MapType
+     * @param mapType the new MapType
      * @return this object
      */
     public MapView setMapType(final MapType mapType) {
@@ -534,11 +567,9 @@ public final class MapView extends Region implements AutoCloseable {
      * map. This method must only be called after the map is initialized, otherwise a warning is logged and the
      * coordinateLine is not added to the map.
      *
-     * @param coordinateLine
-     *     the CoordinateLine to add
+     * @param coordinateLine the CoordinateLine to add
      * @return this object
-     * @throws java.lang.NullPointerException
-     *     if argument is null
+     * @throws java.lang.NullPointerException if argument is null
      */
     public MapView addCoordinateLine(final CoordinateLine coordinateLine) {
         if (!getInitialized()) {
@@ -555,22 +586,22 @@ public final class MapView extends Region implements AutoCloseable {
                     }
                     final JSObject jsCoordinateLine = (JSObject) jsMapView.call("getCoordinateLine", id);
                     coordinateLine.getCoordinateStream().forEach(
-                        (coord) -> jsCoordinateLine
-                            .call("addCoordinate", coord.getLatitude(), coord.getLongitude()));
+                            (coord) -> jsCoordinateLine
+                                    .call("addCoordinate", coord.getLatitude(), coord.getLongitude()));
                     final javafx.scene.paint.Color color = coordinateLine.getColor();
                     jsCoordinateLine.call("setColor",
-                        color.getRed() * 255, color.getGreen() * 255, color.getBlue() * 255,
-                        color.getOpacity());
+                            color.getRed() * 255, color.getGreen() * 255, color.getBlue() * 255,
+                            color.getOpacity());
                     final javafx.scene.paint.Color fillColor = coordinateLine.getFillColor();
                     jsCoordinateLine.call("setFillColor",
-                        fillColor.getRed() * 255, fillColor.getGreen() * 255, fillColor.getBlue() * 255,
-                        fillColor.getOpacity());
+                            fillColor.getRed() * 255, fillColor.getGreen() * 255, fillColor.getBlue() * 255,
+                            fillColor.getOpacity());
                     jsCoordinateLine.call("setWidth", coordinateLine.getWidth());
                     jsCoordinateLine.call("setClosed", coordinateLine.isClosed());
                     jsCoordinateLine.call("seal");
 
                     final ChangeListener<Boolean> changeListener =
-                        (observable, newValue, oldValue) -> setCoordinateLineVisibleInMap(id);
+                            (observable, newValue, oldValue) -> setCoordinateLineVisibleInMap(id);
                     coordinateLine.visibleProperty().addListener(changeListener);
                     // store the listener as we must unregister on removeCooridnateLine
                     coordinateLineListeners.put(id, new CoordinateLineListener(changeListener));
@@ -586,8 +617,7 @@ public final class MapView extends Region implements AutoCloseable {
     /**
      * shows or hides the coordinateline in the map according to it's visible property.
      *
-     * @param coordinateLineId
-     *     the id of the CoordinateLine object
+     * @param coordinateLineId the id of the CoordinateLine object
      */
     private void setCoordinateLineVisibleInMap(final String coordinateLineId) {
         if (null != coordinateLineId) {
@@ -609,15 +639,13 @@ public final class MapView extends Region implements AutoCloseable {
      * adds a label to the map. If it was already added, nothing is changed. If the MapView is not yet initialized, a
      * warning is logged and nothing changes. If the label has no coordinate set, it is not added and a logging entry is
      * written.
-     *
+     * <p>
      * The MapView only keeps a weak reference to the label, so the caller must keep a reference to prevent the Label
      * object from being garbage collected.
      *
-     * @param mapLabel
-     *     the label
+     * @param mapLabel the label
      * @return this object
-     * @throws java.lang.NullPointerException
-     *     if marker is null
+     * @throws java.lang.NullPointerException if marker is null
      */
     public MapView addLabel(final MapLabel mapLabel) {
         if (!getInitialized()) {
@@ -636,14 +664,14 @@ public final class MapView extends Region implements AutoCloseable {
             synchronized (mapCoordinateElements) {
                 // if the label is attached to a Marker, only add it when the marker is already added to the MapView
                 if (mapLabel.getMarker().isPresent() && !mapCoordinateElements.containsKey(mapLabel.getMarker().get()
-                    .getId())) {
+                        .getId())) {
                     return this;
                 }
                 if (!mapCoordinateElements.containsKey(id)) {
                     addMapCoordinateElement(mapLabel);
                     jsMapView.call("addLabel", id, mapLabel.getText(), mapLabel.getCssClass(),
-                        mapLabel.getPosition().getLatitude(), mapLabel.getPosition().getLongitude(),
-                        mapLabel.getOffsetX(), mapLabel.getOffsetY());
+                            mapLabel.getPosition().getLatitude(), mapLabel.getPosition().getLongitude(),
+                            mapLabel.getOffsetX(), mapLabel.getOffsetY());
                     if (logger.isTraceEnabled()) {
                         logger.trace("add label in OpenLayers map {}", mapLabel);
                     }
@@ -657,26 +685,25 @@ public final class MapView extends Region implements AutoCloseable {
     /**
      * sets up the internal information about a MapCoordinate Element.
      *
-     * @param mapCoordinateElement
-     *     the MapCooordinate Element
+     * @param mapCoordinateElement the MapCooordinate Element
      */
     private void addMapCoordinateElement(final MapCoordinateElement mapCoordinateElement) {
         final String id = mapCoordinateElement.getId();
         // create change listeners for the coordinate and the visibility and store them with the
         // marker's id.
         final ChangeListener<Coordinate> coordinateChangeListener =
-            (observable, oldValue, newValue) -> moveMapCoordinateElementInMap(id);
+                (observable, oldValue, newValue) -> moveMapCoordinateElementInMap(id);
         final ChangeListener<Boolean> visibileChangeListener =
-            (observable, oldValue, newValue) -> setMarkerVisibleInMap(id);
+                (observable, oldValue, newValue) -> setMarkerVisibleInMap(id);
         final ChangeListener<String> cssChangeListener = (observable, oldValue, newValue) -> setMapCoordinateElementCss(id,
-            newValue);
+                newValue);
         final ChangeListener<Number> rotationChangeListener = (observable, oldvalue, newValue) -> setMapCoordinateElementRotation(id, newValue);
 
         mapCoordinateElementListeners.put(id, new MapCoordinateElementListener(
-            coordinateChangeListener,
-            visibileChangeListener,
-            cssChangeListener,
-            rotationChangeListener));
+                coordinateChangeListener,
+                visibileChangeListener,
+                cssChangeListener,
+                rotationChangeListener));
 
         // observe the mapCoordinateElements position, visibility and cssClass with the listeners
         mapCoordinateElement.positionProperty().addListener(coordinateChangeListener);
@@ -691,10 +718,8 @@ public final class MapView extends Region implements AutoCloseable {
     /**
      * sets the css class for a MapCoordinateElement. Currently supported only for MapLabels.
      *
-     * @param id
-     *     the id of the element
-     * @param cssclass
-     *     the css class
+     * @param id       the id of the element
+     * @param cssclass the css class
      */
     private void setMapCoordinateElementCss(final String id, final String cssclass) {
         jsMapView.call("setLabelCss", id, cssclass);
@@ -704,20 +729,19 @@ public final class MapView extends Region implements AutoCloseable {
     /**
      * sets the rotation angle in degrees for a MapCoordinateElement.
      *
-     * @param id
-     *     the id of the element
-     * @param rotation
-     *     the rotation angle
+     * @param id       the id of the element
+     * @param rotation the rotation angle
      */
     private void setMapCoordinateElementRotation(final String id, final Number rotation) {
-        jsMapView.call("rotateMapObject", id, rotation.intValue() % 360);
+        int currentMapRotationAngles = (int) ((getRotation() * 180) / Math.PI);
+        int objRotation = currentMapRotationAngles + rotation.intValue();
+        jsMapView.call("rotateMapObject", id, objRotation % 360);
     }
 
     /**
      * sets the visibility of a MapCoordinateElement in the map.
      *
-     * @param id
-     *     the marker to show or hide
+     * @param id the marker to show or hide
      */
     private void setMarkerVisibleInMap(final String id) {
         if (null != id) {
@@ -738,8 +762,7 @@ public final class MapView extends Region implements AutoCloseable {
     /**
      * adjusts the mapCoordinateElement's position in the map.
      *
-     * @param id
-     *     the id of the element to move
+     * @param id the id of the element to move
      */
     private void moveMapCoordinateElementInMap(final String id) {
         if (getInitialized() && null != id) {
@@ -751,8 +774,8 @@ public final class MapView extends Region implements AutoCloseable {
                         logger.trace("move element in OpenLayers map to {}", mapCoordinateElement);
                     }
                     jsMapView.call("moveMapObject", mapCoordinateElement.getId(),
-                        mapCoordinateElement.getPosition().getLatitude(),
-                        mapCoordinateElement.getPosition().getLongitude());
+                            mapCoordinateElement.getPosition().getLatitude(),
+                            mapCoordinateElement.getPosition().getLongitude());
                 }
             }
         }
@@ -762,15 +785,13 @@ public final class MapView extends Region implements AutoCloseable {
      * adds a marker to the map. If it was already added, nothing is changed. If the MapView is not yet initialized, a
      * warning is logged and nothing changes. If the marker has no coordinate set, it is not added and a logging entry
      * is written.
-     *
+     * <p>
      * The MapView only keeps a weak reference to the marker, so the caller must keep a reference to prevent the Marker
      * object from being garbage collected.
      *
-     * @param marker
-     *     the marker
+     * @param marker the marker
      * @return this object
-     * @throws java.lang.NullPointerException
-     *     if marker is null
+     * @throws java.lang.NullPointerException if marker is null
      */
     public MapView addMarker(final Marker marker) {
         if (!getInitialized()) {
@@ -790,8 +811,8 @@ public final class MapView extends Region implements AutoCloseable {
                 if (!mapCoordinateElements.containsKey(id)) {
                     addMapCoordinateElement(marker);
                     jsMapView.call("addMarker", id, marker.getImageURL().toExternalForm(),
-                        marker.getPosition().getLatitude(), marker.getPosition().getLongitude(),
-                        marker.getOffsetX(), marker.getOffsetY());
+                            marker.getPosition().getLatitude(), marker.getPosition().getLongitude(),
+                            marker.getOffsetX(), marker.getOffsetY());
 
                     if (logger.isTraceEnabled()) {
                         logger.trace("add marker in OpenLayers map {}", marker);
@@ -814,11 +835,10 @@ public final class MapView extends Region implements AutoCloseable {
 
     /**
      * loads an image and converts it's data to a base64 encoded data url.
-     *
+     * <p>
      * NOT NEEDED AT THE MOMENT
      *
-     * @param imageURL
-     *     where to load the image from, may not be null
+     * @param imageURL where to load the image from, may not be null
      * @return the encoded image as data url
      */
     @SuppressWarnings("UnusedDeclaration")
@@ -837,7 +857,7 @@ public final class MapView extends Region implements AutoCloseable {
                     }
                     os.flush();
                     dataUrl = "data:" + contentType + ";base64," + Base64.getEncoder().encodeToString(os
-                        .toByteArray());
+                            .toByteArray());
                 } else {
                     if (logger.isWarnEnabled()) {
                         logger.warn("could not get content type from {}", imageURL.toExternalForm());
@@ -869,8 +889,7 @@ public final class MapView extends Region implements AutoCloseable {
      * the center or zoom property will be animated in the given time. Setting this to zero does not switch off the zoom
      * animation shown when clicking the controls in the map.
      *
-     * @param animationDuration
-     *     animation duration in ms
+     * @param animationDuration animation duration in ms
      * @return this object
      */
     public MapView setAnimationDuration(int animationDuration) {
@@ -889,8 +908,7 @@ public final class MapView extends Region implements AutoCloseable {
      * initializes the MapView. The internal HTML file is loaded into the contained WebView and the necessary setup is
      * made for communication between this object and the Javascript elements on the web page.
      *
-     * @param configuration
-     *     the initial configuration for the mapView object.
+     * @param configuration the initial configuration for the mapView object.
      */
     public void initialize(final Configuration configuration) {
         if (logger.isDebugEnabled()) {
@@ -923,69 +941,69 @@ public final class MapView extends Region implements AutoCloseable {
 
             // watch for load changes
             webEngine.getLoadWorker().stateProperty().addListener((observable, oldValue, newValue) -> {
-                    if (logger.isTraceEnabled()) {
-                        logger.trace("WebEngine loader state {} -> {}", oldValue, newValue);
-                    }
-                    if (Worker.State.SUCCEEDED == newValue) {
-                        // set an interface object named 'javaConnector' in the web engine
-                        final JSObject window = (JSObject) webEngine.executeScript("window");
-                        window.setMember("_javaConnector", javaConnector);
+                        if (logger.isTraceEnabled()) {
+                            logger.trace("WebEngine loader state {} -> {}", oldValue, newValue);
+                        }
+                        if (Worker.State.SUCCEEDED == newValue) {
+                            // set an interface object named 'javaConnector' in the web engine
+                            final JSObject window = (JSObject) webEngine.executeScript("window");
+                            window.setMember("_javaConnector", javaConnector);
 
-                        // add JS console.log() redirector
-                        webEngine.executeScript("console.log = function(msg) { _javaConnector.console(msg) }");
+                            // add JS console.log() redirector
+                            webEngine.executeScript("console.log = function(msg) { _javaConnector.console(msg) }");
 
-                        // get the Javascript connector object. Even if the html file is loaded, JS may not yet
-                        // be ready, so prepare for an exception and retry
-                        int numRetries = 0;
-                        do {
-                            final Object o;
-                            try {
-                                final String script = "createJSMapView('" + configuration.toJson() + "')";
-                                if (logger.isDebugEnabled()) {
-                                    logger.debug("calling JS \"" + script + '"');
-                                }
-                                o = webEngine.executeScript(script);
-                                jsMapView = (JSObject) o;
-                            } catch (final JSException e) {
-                                if (logger.isWarnEnabled()) {
-                                    logger.warn("JS not ready, retrying... " + e.getMessage());
-                                }
-                                numRetries++;
+                            // get the Javascript connector object. Even if the html file is loaded, JS may not yet
+                            // be ready, so prepare for an exception and retry
+                            int numRetries = 0;
+                            do {
+                                final Object o;
                                 try {
-                                    Thread.sleep(500);
-                                } catch (final InterruptedException e1) {
-                                    if (logger.isWarnEnabled()) {
-                                        logger.warn("retry interrupted");
+                                    final String script = "createJSMapView('" + configuration.toJson() + "')";
+                                    if (logger.isDebugEnabled()) {
+                                        logger.debug("calling JS \"" + script + '"');
                                     }
+                                    o = webEngine.executeScript(script);
+                                    jsMapView = (JSObject) o;
+                                } catch (final JSException e) {
+                                    if (logger.isWarnEnabled()) {
+                                        logger.warn("JS not ready, retrying... " + e.getMessage());
+                                    }
+                                    numRetries++;
+                                    try {
+                                        Thread.sleep(500);
+                                    } catch (final InterruptedException e1) {
+                                        if (logger.isWarnEnabled()) {
+                                            logger.warn("retry interrupted");
+                                        }
+                                    }
+                                } catch (final Exception e) {
+                                    if (logger.isWarnEnabled()) {
+                                        logger.warn("getJSMapView: returned (null)");
+                                    }
+                                    numRetries++;
                                 }
-                            } catch (final Exception e) {
-                                if (logger.isWarnEnabled()) {
-                                    logger.warn("getJSMapView: returned (null)");
-                                }
-                                numRetries++;
-                            }
-                        } while (null == jsMapView && numRetries < NUM_RETRIES_FOR_JS);
+                            } while (null == jsMapView && numRetries < NUM_RETRIES_FOR_JS);
 
-                        if (null == jsMapView) {
+                            if (null == jsMapView) {
+                                if (logger.isWarnEnabled()) {
+                                    logger.warn("error loading {}, JavaScript not ready.", MAPVIEW_HTML);
+                                }
+                            } else {
+                                mapViewReady.set(true);
+                                setMapTypeInMap();
+                                setCenterInMap();
+                                setZoomInMap();
+                                initialized.set(true);
+                                if (logger.isDebugEnabled()) {
+                                    logger.debug("initialized.");
+                                }
+                            }
+                        } else if (Worker.State.FAILED == newValue) {
                             if (logger.isWarnEnabled()) {
-                                logger.warn("error loading {}, JavaScript not ready.", MAPVIEW_HTML);
+                                logger.warn("error loading {}", MAPVIEW_HTML);
                             }
-                        } else {
-                            mapViewReady.set(true);
-                            setMapTypeInMap();
-                            setCenterInMap();
-                            setZoomInMap();
-                            initialized.set(true);
-                            if (logger.isDebugEnabled()) {
-                                logger.debug("initialized.");
-                            }
-                        }
-                    } else if (Worker.State.FAILED == newValue) {
-                        if (logger.isWarnEnabled()) {
-                            logger.warn("error loading {}", MAPVIEW_HTML);
                         }
                     }
-                }
             );
             // do the load
             if (logger.isDebugEnabled()) {
@@ -1014,16 +1032,16 @@ public final class MapView extends Region implements AutoCloseable {
                 logger.debug("loading from {}", mapviewURL.toExternalForm());
             }
             try (
-                final Stream<String> lines = new BufferedReader(
-                    new InputStreamReader(mapviewURL.openStream(), StandardCharsets.UTF_8)).lines()
+                    final Stream<String> lines = new BufferedReader(
+                            new InputStreamReader(mapviewURL.openStream(), StandardCharsets.UTF_8)).lines()
             ) {
                 final String baseURL = mapviewURL.toExternalForm();
                 final String baseURLPath = baseURL.substring(0, baseURL.lastIndexOf('/') + 1);
                 mapViewHtml = lines
-                    .map(String::trim)
-                    .map(line -> processHtmlLine(baseURLPath, line))
-                    .flatMap(List::stream)
-                    .collect(Collectors.joining("\n"));
+                        .map(String::trim)
+                        .map(line -> processHtmlLine(baseURLPath, line))
+                        .flatMap(List::stream)
+                        .collect(Collectors.joining("\n"));
 //                logger.finer(mapViewHtml);
             } catch (final IOException e) {
                 if (logger.isWarnEnabled()) {
@@ -1049,10 +1067,8 @@ public final class MapView extends Region implements AutoCloseable {
     /**
      * processes a line from the html file, adding the base url and replacing template values.
      *
-     * @param baseURL
-     *     the URL of the file
-     * @param line
-     *     the line to process, must be trimmed
+     * @param baseURL the URL of the file
+     * @param line    the line to process, must be trimmed
      * @return a List with the processed strings
      */
     private List<String> processHtmlLine(final String baseURL, final String line) {
@@ -1071,12 +1087,12 @@ public final class MapView extends Region implements AutoCloseable {
                         logger.trace("loading custom mapview css from {}", customMapviewCssURL.get().toExternalForm());
                     }
                     try (final Stream<String> lines = new BufferedReader(
-                        new InputStreamReader(customMapviewCssURL.get().openStream(), StandardCharsets.UTF_8))
-                        .lines()
+                            new InputStreamReader(customMapviewCssURL.get().openStream(), StandardCharsets.UTF_8))
+                            .lines()
                     ) {
                         return lines
-                            .filter(l -> !l.contains("<"))
-                            .collect(Collectors.toList());
+                                .filter(l -> !l.contains("<"))
+                                .collect(Collectors.toList());
                     } catch (final IOException e) {
                         if (logger.isWarnEnabled()) {
                             logger.warn("loading resource {}", resource, e);
@@ -1088,8 +1104,8 @@ public final class MapView extends Region implements AutoCloseable {
                     logger.trace("loading from {}", resource);
                 }
                 try (final Stream<String> lines = new BufferedReader(
-                    new InputStreamReader(new URL(resource).openStream(), StandardCharsets.UTF_8))
-                    .lines()
+                        new InputStreamReader(new URL(resource).openStream(), StandardCharsets.UTF_8))
+                        .lines()
                 ) {
                     return lines.collect(Collectors.toList());
                 } catch (final IOException e) {
@@ -1122,11 +1138,9 @@ public final class MapView extends Region implements AutoCloseable {
      * removes a CoordinateLine from the map. If it was not added or the MapView is not yet initialized, nothing
      * happens
      *
-     * @param coordinateLine
-     *     the CoordinateLine to add
+     * @param coordinateLine the CoordinateLine to add
      * @return this object
-     * @throws java.lang.NullPointerException
-     *     if argument is null
+     * @throws java.lang.NullPointerException if argument is null
      */
     public MapView removeCoordinateLine(final CoordinateLine coordinateLine) {
         if (!getInitialized()) {
@@ -1142,8 +1156,7 @@ public final class MapView extends Region implements AutoCloseable {
     /**
      * removes the CoordinateLinewith the given id. if no such element is found, nothing happens.
      *
-     * @param id
-     *     id of the coordinate line, may not be null
+     * @param id id of the coordinate line, may not be null
      */
     private void removeCoordinateLineWithId(final String id) {
         // sync on the map as the cleaner thread accesses this as well
@@ -1177,11 +1190,9 @@ public final class MapView extends Region implements AutoCloseable {
      * removes the given label from the map and deregisters the change listeners. If the label was not in the map or the
      * MapView is not yet initialized, nothing happens.
      *
-     * @param mapLabel
-     *     label to remove
+     * @param mapLabel label to remove
      * @return this object
-     * @throws java.lang.NullPointerException
-     *     if mapLabel is null
+     * @throws java.lang.NullPointerException if mapLabel is null
      */
     public MapView removeLabel(final MapLabel mapLabel) {
         if (!getInitialized()) {
@@ -1199,8 +1210,7 @@ public final class MapView extends Region implements AutoCloseable {
     /**
      * removes a MapCoordinateElement from the map. If no such element is found, nothing happens.
      *
-     * @param mapCoordinateElement
-     *     the element to remove
+     * @param mapCoordinateElement the element to remove
      */
     private void removeMapCoordinateElement(final MapCoordinateElement mapCoordinateElement) {
         removeMapCoordinateElementWithId(requireNonNull(mapCoordinateElement).getId());
@@ -1209,8 +1219,7 @@ public final class MapView extends Region implements AutoCloseable {
     /**
      * remove a MapCoordinateElement with a given id from the map.  If no such element is found, nothing happens.
      *
-     * @param id
-     *     the id of the element to remove.
+     * @param id the id of the element to remove.
      */
     private void removeMapCoordinateElementWithId(final String id) {
         // sync on the map as the cleaner thread accesses this as well
@@ -1247,11 +1256,9 @@ public final class MapView extends Region implements AutoCloseable {
      * removes the given marker from the map and deregisters the change listeners. If the marker was not in the map or
      * the MapView is not yet initialized, nothing happens.
      *
-     * @param marker
-     *     marker to remove
+     * @param marker marker to remove
      * @return this object
-     * @throws java.lang.NullPointerException
-     *     if marker is null
+     * @throws java.lang.NullPointerException if marker is null
      */
     public MapView removeMarker(final Marker marker) {
         if (!getInitialized()) {
@@ -1268,8 +1275,7 @@ public final class MapView extends Region implements AutoCloseable {
     /**
      * sets the Bing Maps API Key.
      *
-     * @param apiKey
-     *     api key
+     * @param apiKey api key
      * @return this object
      */
     public MapView setBingMapsApiKey(final String apiKey) {
@@ -1284,8 +1290,7 @@ public final class MapView extends Region implements AutoCloseable {
     /**
      * sets the WMS parameters.
      *
-     * @param wmsParam
-     *     WMS parameters
+     * @param wmsParam WMS parameters
      * @return this object
      */
     public MapView setWMSParam(final WMSParam wmsParam) {
@@ -1296,8 +1301,7 @@ public final class MapView extends Region implements AutoCloseable {
     /**
      * sets the XYZ parameters.
      *
-     * @param xyzParam
-     *     XYZ parameters
+     * @param xyzParam XYZ parameters
      * @return this object
      */
     public MapView setXYZParam(final XYZParam xyzParam) {
@@ -1308,10 +1312,8 @@ public final class MapView extends Region implements AutoCloseable {
     /**
      * sets the URL for the custom mapview css file.
      *
-     * @param url
-     *     css url
-     * @throws NullPointerException
-     *     if url is null
+     * @param url css url
+     * @throws NullPointerException if url is null
      */
     public void setCustomMapviewCssURL(final URL url) {
         requireNonNull(url);
@@ -1321,11 +1323,9 @@ public final class MapView extends Region implements AutoCloseable {
     /**
      * sets the center and zoom of the map so that the given extent is visible.
      *
-     * @param extent
-     *     extent to show, if null, nothing is changed
+     * @param extent extent to show, if null, nothing is changed
      * @return this object
-     * @throws java.lang.NullPointerException
-     *     when extent is null
+     * @throws java.lang.NullPointerException when extent is null
      */
     public MapView setExtent(final Extent extent) {
         if (!getInitialized()) {
@@ -1338,7 +1338,7 @@ public final class MapView extends Region implements AutoCloseable {
                 logger.debug("setting extent in OpenLayers map: {}, animation: ", extent, animationDuration.get());
             }
             jsMapView.call("setExtent", extent.getMin().getLatitude(), extent.getMin().getLongitude(),
-                extent.getMax().getLatitude(), extent.getMax().getLongitude(), animationDuration.get());
+                    extent.getMax().getLatitude(), extent.getMax().getLongitude(), animationDuration.get());
         }
         return this;
     }
@@ -1346,11 +1346,9 @@ public final class MapView extends Region implements AutoCloseable {
     /**
      * constrains the map to the given extent so that it is not possible to zoom out or pan if this would make some area outside of this extent visible.
      *
-     * @param extent
-     *     the constraining extent
+     * @param extent the constraining extent
      * @return this object
-     * @throws java.lang.NullPointerException
-     *     when extent is null
+     * @throws java.lang.NullPointerException when extent is null
      */
     public MapView constrainExtent(final Extent extent) {
         if (!getInitialized()) {
@@ -1363,7 +1361,7 @@ public final class MapView extends Region implements AutoCloseable {
                 logger.debug("constraining extent in OpenLayers map: {}: ", extent);
             }
             jsMapView.call("constrainExtent", extent.getMin().getLatitude(), extent.getMin().getLongitude(),
-                extent.getMax().getLatitude(), extent.getMax().getLongitude());
+                    extent.getMax().getLatitude(), extent.getMax().getLongitude());
         }
         return this;
     }
@@ -1406,10 +1404,8 @@ public final class MapView extends Region implements AutoCloseable {
          * called when the user has moved the map. the coordinates are EPSG:4326 (WGS) values. The arguments are double
          * primitives and no Double objects.
          *
-         * @param lat
-         *     new latitude value
-         * @param lon
-         *     new longitude value
+         * @param lat new latitude value
+         * @param lon new longitude value
          */
         public void centerMovedTo(double lat, double lon) {
             final Coordinate newCenter = new Coordinate(lat, lon);
@@ -1423,10 +1419,8 @@ public final class MapView extends Region implements AutoCloseable {
         /**
          * called when the user has moved the pointer (mouse).
          *
-         * @param lat
-         *     new latitude value
-         * @param lon
-         *     new longitude value
+         * @param lat new latitude value
+         * @param lon new longitude value
          */
         public void pointerMovedTo(double lat, double lon) {
             final Coordinate coordinate = new Coordinate(lat, lon);
@@ -1439,8 +1433,7 @@ public final class MapView extends Region implements AutoCloseable {
         /**
          * called from the JS in the web page to output a message to the application's log.
          *
-         * @param msg
-         *     the message to log
+         * @param msg the message to log
          */
         public void debug(String msg) {
             if (logger.isDebugEnabled()) {
@@ -1451,8 +1444,7 @@ public final class MapView extends Region implements AutoCloseable {
         /**
          * called when something writes in the JS side to console.log()
          *
-         * @param msg
-         *     the message to log
+         * @param msg the message to log
          */
         public void console(String msg) {
             if (logger.isDebugEnabled()) {
@@ -1463,8 +1455,7 @@ public final class MapView extends Region implements AutoCloseable {
         /**
          * called when an a href in the map is clicked and shows the URL in the default browser.
          *
-         * @param href
-         *     the url to show
+         * @param href the url to show
          */
         public void showLink(final String href) {
             if (null != href && !href.isEmpty()) {
@@ -1490,10 +1481,8 @@ public final class MapView extends Region implements AutoCloseable {
         /**
          * called when the user has single-clicked in the map. the coordinates are EPSG:4326 (WGS) values.
          *
-         * @param lat
-         *     new latitude value
-         * @param lon
-         *     new longitude value
+         * @param lat new latitude value
+         * @param lon new longitude value
          */
         public void singleClickAt(double lat, double lon) {
             final Coordinate coordinate = new Coordinate(lat, lon);
@@ -1506,10 +1495,8 @@ public final class MapView extends Region implements AutoCloseable {
         /**
          * called when the user has context-clicked in the map. the coordinates are EPSG:4326 (WGS) values.
          *
-         * @param lat
-         *     new latitude value
-         * @param lon
-         *     new longitude value
+         * @param lat new latitude value
+         * @param lon new longitude value
          */
         public void contextClickAt(double lat, double lon) {
             final Coordinate coordinate = new Coordinate(lat, lon);
@@ -1522,8 +1509,7 @@ public final class MapView extends Region implements AutoCloseable {
         /**
          * called when a marker was clicked.
          *
-         * @param name
-         *     name of the marker
+         * @param name name of the marker
          */
         public void markerClicked(final String name) {
             processMarkerClicked(name, ClickType.LEFT);
@@ -1532,8 +1518,7 @@ public final class MapView extends Region implements AutoCloseable {
         /**
          * calles when mouse is pressed on marker.
          *
-         * @param name
-         *     name of the marker
+         * @param name name of the marker
          */
         public void markerMouseDown(final String name) {
             processMarkerClicked(name, ClickType.MOUSEDOWN);
@@ -1542,8 +1527,7 @@ public final class MapView extends Region implements AutoCloseable {
         /**
          * calles when mouse is released on marker.
          *
-         * @param name
-         *     name of the marker
+         * @param name name of the marker
          */
         public void markerMouseUp(final String name) {
             processMarkerClicked(name, ClickType.MOUSEUP);
@@ -1552,8 +1536,7 @@ public final class MapView extends Region implements AutoCloseable {
         /**
          * called when a marker was doubleclicked.
          *
-         * @param name
-         *     name of the marker
+         * @param name name of the marker
          */
         public void markerDoubleClicked(final String name) {
             processMarkerClicked(name, ClickType.DOUBLE);
@@ -1562,8 +1545,7 @@ public final class MapView extends Region implements AutoCloseable {
         /**
          * called when a marker was doubleclicked.
          *
-         * @param name
-         *     name of the marker
+         * @param name name of the marker
          */
         public void markerRightClicked(final String name) {
             processMarkerClicked(name, ClickType.RIGHT);
@@ -1572,8 +1554,7 @@ public final class MapView extends Region implements AutoCloseable {
         /**
          * called when a marker was entered.
          *
-         * @param name
-         *     name of the marker
+         * @param name name of the marker
          */
         public void markerEntered(final String name) {
             processMarkerClicked(name, ClickType.ENTERED);
@@ -1582,8 +1563,7 @@ public final class MapView extends Region implements AutoCloseable {
         /**
          * called when a marker was exited.
          *
-         * @param name
-         *     name of the marker
+         * @param name name of the marker
          */
         public void markerExited(final String name) {
             processMarkerClicked(name, ClickType.EXITED);
@@ -1592,10 +1572,8 @@ public final class MapView extends Region implements AutoCloseable {
         /**
          * processes a marker click
          *
-         * @param name
-         *     name of the marker
-         * @param clickType
-         *     the type of click
+         * @param name      name of the marker
+         * @param clickType the type of click
          */
         private void processMarkerClicked(final String name, final ClickType clickType) {
             if (logger.isTraceEnabled()) {
@@ -1636,8 +1614,7 @@ public final class MapView extends Region implements AutoCloseable {
         /**
          * called when a label was single clicked.
          *
-         * @param name
-         *     name of the lael
+         * @param name name of the lael
          */
         public void labelClicked(final String name) {
             processLabelClicked(name, ClickType.LEFT);
@@ -1646,8 +1623,7 @@ public final class MapView extends Region implements AutoCloseable {
         /**
          * called when mouse is pressed on label.
          *
-         * @param name
-         *     name of the label
+         * @param name name of the label
          */
         public void labelMouseDown(final String name) {
             processLabelClicked(name, ClickType.MOUSEDOWN);
@@ -1656,8 +1632,7 @@ public final class MapView extends Region implements AutoCloseable {
         /**
          * called when mouse is released on label.
          *
-         * @param name
-         *     name of the label
+         * @param name name of the label
          */
         public void labelMouseUp(final String name) {
             processLabelClicked(name, ClickType.MOUSEUP);
@@ -1666,8 +1641,7 @@ public final class MapView extends Region implements AutoCloseable {
         /**
          * called when a label was double clicked.
          *
-         * @param name
-         *     name of the lael
+         * @param name name of the lael
          */
         public void labelDoubleClicked(final String name) {
             processLabelClicked(name, ClickType.DOUBLE);
@@ -1676,8 +1650,7 @@ public final class MapView extends Region implements AutoCloseable {
         /**
          * called when a label was single clicked.
          *
-         * @param name
-         *     name of the lael
+         * @param name name of the lael
          */
         public void labelRightClicked(final String name) {
             processLabelClicked(name, ClickType.RIGHT);
@@ -1686,8 +1659,7 @@ public final class MapView extends Region implements AutoCloseable {
         /**
          * called when a label was entered.
          *
-         * @param name
-         *     name of the lael
+         * @param name name of the lael
          */
         public void labelEntered(final String name) {
             processLabelClicked(name, ClickType.ENTERED);
@@ -1696,8 +1668,7 @@ public final class MapView extends Region implements AutoCloseable {
         /**
          * called when a label was exited.
          *
-         * @param name
-         *     name of the lael
+         * @param name name of the lael
          */
         public void labelExited(final String name) {
             processLabelClicked(name, ClickType.EXITED);
@@ -1706,10 +1677,8 @@ public final class MapView extends Region implements AutoCloseable {
         /**
          * called when a label was clicked.
          *
-         * @param name
-         *     name of the lael
-         * @param clickType
-         *     the type of click
+         * @param name      name of the lael
+         * @param clickType the type of click
          */
         private void processLabelClicked(final String name, final ClickType clickType) {
             if (logger.isTraceEnabled()) {
@@ -1752,8 +1721,7 @@ public final class MapView extends Region implements AutoCloseable {
         /**
          * called when the user changed the zoom with the controls in the map.
          *
-         * @param newZoom
-         *     new zoom value
+         * @param newZoom new zoom value
          */
         public void zoomChanged(double newZoom) {
             final long roundedZoom = Math.round(newZoom);
@@ -1767,8 +1735,7 @@ public final class MapView extends Region implements AutoCloseable {
         /**
          * called when the user changed the rotation with the controls in the map.
          *
-         * @param newRotation
-         *     new rotation angle value
+         * @param newRotation new rotation angle value
          */
         public void rotationChanged(double newRotation) {
             if (logger.isTraceEnabled()) {
@@ -1776,19 +1743,24 @@ public final class MapView extends Region implements AutoCloseable {
             }
             lastRotationFromMap.set(newRotation);
             setRotation(newRotation);
+            // synchronize on the mapCoordinateElements map as the cleaning thread accesses this as well
+            synchronized (mapCoordinateElements) {
+                mapCoordinateElements.forEach((id, key) -> {
+                    var el = key.get();
+                    if (el != null && el.rotateWithMap) {
+                        setMapCoordinateElementRotation(el.getId(), el.getRotation());
+                    }
+                });
+            }
         }
 
         /**
          * called when the user selected an extent by dragging the mouse with modifier pressed.
          *
-         * @param latMin
-         *     latitude of upper left corner
-         * @param lonMin
-         *     longitude of upper left corner
-         * @param latMax
-         *     latitude of lower right corner
-         * @param lonMax
-         *     longitude of lower right corner
+         * @param latMin latitude of upper left corner
+         * @param lonMin longitude of upper left corner
+         * @param latMax latitude of lower right corner
+         * @param lonMax longitude of lower right corner
          */
         public void extentSelected(double latMin, double lonMin, double latMax, double lonMax) {
             final Extent extent = Extent.forCoordinates(new Coordinate(latMin, lonMin), new Coordinate(latMax, lonMax));
@@ -1801,14 +1773,10 @@ public final class MapView extends Region implements AutoCloseable {
         /**
          * called when the map extent changed by changing the center or zoom of the map.
          *
-         * @param latMin
-         *     latitude of upper left corner
-         * @param lonMin
-         *     longitude of upper left corner
-         * @param latMax
-         *     latitude of lower right corner
-         * @param lonMax
-         *     longitude of lower right corner
+         * @param latMin latitude of upper left corner
+         * @param lonMin longitude of upper left corner
+         * @param latMax latitude of lower right corner
+         * @param lonMax longitude of lower right corner
          */
         public void extentChanged(double latMin, double lonMin, double latMax, double lonMax) {
             final Extent extent = Extent.forCoordinates(new Coordinate(latMin, lonMin), new Coordinate(latMax, lonMax));
@@ -1821,8 +1789,7 @@ public final class MapView extends Region implements AutoCloseable {
         /**
          * called when a wheel event is detected on a marker or a label
          *
-         * @param deltaY
-         *     the reported wheel delta.
+         * @param deltaY the reported wheel delta.
          */
         public void wheelEvent(double deltaY) {
             if (logger.isTraceEnabled()) {

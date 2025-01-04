@@ -37,6 +37,8 @@ public abstract class MapCoordinateElement extends MapElement {
     /** the rotation of the element. */
     protected SimpleIntegerProperty rotation = new SimpleIntegerProperty(0);
 
+    protected boolean rotateWithMap;
+
     public MapCoordinateElement() {
         this(0, 0);
     }
@@ -93,6 +95,18 @@ public abstract class MapCoordinateElement extends MapElement {
 
     public SimpleIntegerProperty rotationProperty() {
         return rotation;
+    }
+
+    /**
+     * Rotate object with map when map view rotated
+     *
+     * @param rotateWithMap
+     *     boolean value
+     * @return this object
+     */
+    public MapCoordinateElement setRotateWithMap(final boolean rotateWithMap) {
+        this.rotateWithMap = rotateWithMap;
+        return this;
     }
 
     /**
